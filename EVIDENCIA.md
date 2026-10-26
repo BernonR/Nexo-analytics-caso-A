@@ -39,7 +39,7 @@ Portal Nexo: http://127.0.0.1:4180
 
 ## 2. Pruebas automatizadas (`npm run pruebas`)
 
-El script se ejecutó tres veces. Cada ejecución generó su propio reporte en la carpeta `evidencia/`, con el detalle de cada request y la consola del backend.
+El script se ejecutó cinco veces. Cada ejecución generó su propio reporte en la carpeta `evidencia/`, con el detalle de cada request y la consola del backend.
 
 ### Contenido de cada ejecución
 
@@ -52,7 +52,7 @@ El script se ejecutó tres veces. Cada ejecución generó su propio reporte en l
 
 ### Resultado en Registros aceptados
 
-En las tres ejecuciones se enviaron 6 requests a la API real y **todos recibieron HTTP 200**, pero solo se guardaron los 2 válidos:
+En las cinco ejecuciones se enviaron 6 requests a la API real y **todos recibieron HTTP 200**, pero solo se guardaron los 2 válidos:
 
 - **Ejecución 10:07** · usuario `prueba-20261026160755` · reporte `resultado-pruebas-20261026160755.md`
     - Aceptados: login (16:07:54.005Z) y section perfil (16:07:54.416Z), sesión `prueba-20261026160755-valida`.
@@ -64,7 +64,17 @@ En las tres ejecuciones se enviaron 6 requests a la API real y **todos recibiero
     - Aceptados: login (16:20:05.686Z) y section perfil (16:20:06.052Z), sesión `prueba-20261026162007-valida`.
     - No aparecen: los mismos cuatro inválidos.
 
-El resultado es idéntico en las tres ejecuciones: un HTTP 200 no confirma que el evento se guardó.
+- **Ejecución 11:09** · usuario `prueba-20261026170920` · reporte `resultado-pruebas-20261026170920.md`
+    - Aceptados: login (17:09:18.423Z) y section perfil (17:09:18.779Z), sesión `prueba-20261026170920-valida`.
+    - No aparecen: los mismos cuatro inválidos.
+    - Esta ejecución incluye veredictos automáticos: las 5 comprobaciones locales (demora, analytics caído y Bearer) dieron **PASA**.
+
+- **Ejecución 11:18** · usuario `prueba-20261026171818` · reporte `resultado-pruebas-20261026171818.md`
+    - Aceptados: login (17:18:16.685Z) y section perfil (17:18:17.066Z), sesión `prueba-20261026171818-valida`.
+    - No aparecen: los mismos cuatro inválidos.
+    - Ejecutada con la versión final de `server.mjs`: las 5 comprobaciones locales dieron **PASA**.
+
+El resultado es idéntico en las cinco ejecuciones: un HTTP 200 no confirma que el evento se guardó.
 
 ### Demora (ejecución 10:20)
 

@@ -1,6 +1,20 @@
-# Plan de dependencias e insumos: Nexo
+# Mapa de dependencias: Nexo
 
-Plan preparado antes de modificar el código. Se basa en el proyecto recibido (`server.mjs`, `public/`, `.env.example`), la documentación de Analytics API v1 y la página del caso A en el portal.
+## En resumen
+
+Para que el portal de Nexo registre eventos de analytics hacen falta **9 insumos**. Cinco los entrega el proveedor de analytics (URL base, rutas, Bearer, canal y contrato del evento), uno es la consulta de registros para verificar, y el resto son el proyecto del cliente, la identidad que genera el backend y las herramientas de desarrollo.
+
+Los insumos más delicados son el **Bearer** y el **canal**: si alguno está mal, la API responde HTTP 200 igual y descarta el evento sin avisar. Por eso cada envío se confirma en la consulta de registros y no con el código HTTP.
+
+**Cómo leer este documento:**
+
+- **Insumos y dependencias:** qué se necesita, quién lo entrega, para qué sirve, en qué ambiente, cómo se comprueba y qué se bloquea si falta.
+- **Información confirmada:** lo que dice la documentación del proveedor.
+- **Supuestos:** decisiones tomadas sin confirmación.
+- **Preguntas pendientes:** lo que habría que confirmar con el proveedor o el cliente.
+- **Plan de trabajo:** el orden en que se hizo la integración.
+
+Mapa preparado antes de modificar el código. Se basa en el proyecto recibido (`server.mjs`, `public/`, `.env.example`), la documentación de Analytics API v1 y la página del caso A en el portal.
 
 ## Objetivo
 

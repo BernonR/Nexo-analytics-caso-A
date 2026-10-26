@@ -18,6 +18,18 @@ const usuario = `prueba-${marca}`;
 const reporte = [];
 const anotar = (texto = '') => { console.log(texto); reporte.push(texto); };
 
+// Veredictos: lo que el script comprueba por sí mismo queda como PASA o FALLA.
+// Lo que depende de la consulta de registros del proveedor queda como VERIFICAR.
+const veredictos = [];
+function verificar(nombre, cumple, detalle) {
+  const estado = cumple ? 'PASA' : 'FALLA';
+  veredictos.push({ nombre, estado, detalle });
+  anotar(`- **${estado}** · ${nombre}: ${detalle}`);
+}
+function pendiente(nombre, detalle) {
+  veredictos.push({ nombre, estado: 'VERIFICAR', detalle });
+}
+
 // ---------- Parte 1: enviar un request directo a la API ----------
 async function enviar(ruta, cuerpo, { token = bearer, espera = 10000 } = {}) {
   const inicio = Date.now();
@@ -43,6 +55,7 @@ async function caso(titulo, ruta, cuerpo, esperado, opciones) {
   anotar(`- Respuesta: ${resultado}`);
   anotar(`- Esperado en Registros aceptados: **${esperado}**`);
   anotar();
+  pendiente(titulo, `respuesta ${resultado.split(' · ')[0]}; en Registros aceptados ${esperado.startsWith('aparece') ? 'debe aparecer' : 'no debe aparecer'} (sesión ${cuerpo.session})`);
 }
 
 // ---------- Parte 2: levantar el servidor de Nexo con otra configuración ----------
@@ -61,17 +74,20 @@ function levantarNexo(puerto, cambios) {
 
 async function recorrido(nexo) {
   const tiempos = [];
+  const medidas = [];
   let inicio = Date.now();
   const login = await fetch(`${nexo.url}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: usuario }) });
   const textoLogin = await login.text();
+  medidas.push({ status: login.status, ms: Date.now() - inicio });
   tiempos.push(`login → HTTP ${login.status} en ${Date.now() - inicio} ms`);
   const cookie = login.headers.get('set-cookie').split(';')[0];
   for (const seccion of ['perfil', 'movimientos']) {
     inicio = Date.now();
     const res = await fetch(`${nexo.url}/api/section`, { method: 'POST', headers: { 'Content-Type': 'application/json', cookie }, body: JSON.stringify({ section: seccion }) });
+    medidas.push({ status: res.status, ms: Date.now() - inicio });
     tiempos.push(`${seccion} → HTTP ${res.status} en ${Date.now() - inicio} ms`);
   }
-  return { tiempos, textoLogin };
+  return { tiempos, medidas, textoLogin };
 }
 
 // ---------- Ejecución ----------
@@ -111,6 +127,13 @@ anotar('```');
 nexoLento.consola.forEach(l => anotar(l));
 anotar('```');
 anotar();
+anotar('Veredicto:');
+const maxDemora = Math.max(...conDemora.medidas.map(m => m.ms));
+verificar('Demora: el usuario navega sin esperar', conDemora.medidas.every(m => m.status === 200) && maxDemora < 1000, `3 pantallas con HTTP 200, la más lenta en ${maxDemora} ms (límite 1000 ms)`);
+const timeouts = nexoLento.consola.filter(l => l.includes('TimeoutError'));
+const maxCorte = Math.max(0, ...timeouts.map(l => Number(/(\d+) ms/.exec(l)?.[1] || 0)));
+verificar('Demora: el backend corta el envío al llegar al timeout', timeouts.length === 3 && maxCorte < timeoutMs + 1000, `${timeouts.length} de 3 envíos cortados, el último a los ${maxCorte} ms (timeout ${timeoutMs} ms)`);
+anotar();
 
 anotar('## 4. Analytics caído: no hay servicio en la dirección configurada');
 anotar();
@@ -126,16 +149,34 @@ anotar('```');
 nexoCaido.consola.forEach(l => anotar(l));
 anotar('```');
 anotar();
+anotar('Veredicto:');
+verificar('Analytics caído: el usuario navega igual', sinServicio.medidas.every(m => m.status === 200), `login, perfil y movimientos con HTTP ${sinServicio.medidas.map(m => m.status).join(', ')}`);
+const fallas = nexoCaido.consola.filter(l => l.includes('FALLÓ'));
+verificar('Analytics caído: el backend registra la falla', fallas.length === 3, `${fallas.length} de 3 envíos registrados como FALLÓ (${[...new Set(fallas.map(l => l.split(' ')[3]))].join(', ')})`);
+anotar();
 
 anotar('## 5. El Bearer no llega al navegador');
 anotar();
 const enLogin = sinServicio.textoLogin.includes(bearer);
 anotar(`- Respuesta de \`/api/login\` al navegador: \`${sinServicio.textoLogin}\``);
-anotar(`- ¿Contiene el Bearer? **${enLogin ? 'SÍ (error)' : 'No'}**`);
+verificar('El Bearer no llega al navegador', !enLogin, enLogin ? 'la respuesta del login contiene el Bearer' : 'la respuesta del login no contiene el Bearer');
 anotar('- El navegador solo llama a `/api/login` y `/api/section` del propio portal; los requests a la API salen del backend.');
+
+anotar();
+anotar('## Resumen');
+anotar();
+const pasan = veredictos.filter(v => v.estado === 'PASA').length;
+const fallan = veredictos.filter(v => v.estado === 'FALLA').length;
+const porVerificar = veredictos.filter(v => v.estado === 'VERIFICAR');
+anotar(`- **Comprobaciones automáticas:** ${pasan} pasan, ${fallan} fallan.`);
+anotar(`- **Pendientes de confirmar en Registros aceptados:** ${porVerificar.length}. Filtrá por el usuario \`${usuario}\`: deben aparecer solo 2 eventos (login y perfil de la sesión \`${usuario}-valida\`).`);
+porVerificar.forEach(v => anotar(`    - **VERIFICAR** · ${v.nombre}: ${v.detalle}`));
+anotar();
+anotar(fallan === 0 ? '**Resultado: todas las comprobaciones automáticas pasan.**' : '**Resultado: hay comprobaciones que fallan. Revisá el detalle.**');
 
 await mkdir('evidencia', { recursive: true });
 // Cada ejecución crea su propio archivo, con la fecha y hora en el nombre: nunca se sobrescribe uno anterior.
 const archivo = `evidencia/resultado-pruebas-${marca}.md`;
 await writeFile(archivo, reporte.join('\n') + '\n', { flag: 'wx' });
 console.log(`\nReporte guardado en ${archivo}`);
+process.exitCode = fallan === 0 ? 0 : 1;

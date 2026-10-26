@@ -2,7 +2,7 @@
 
 El portal de Nexo registra un evento al iniciar sesión y otro cada vez que el usuario entra a una sección. Los requests a la API de analytics salen solo del backend, conservan el mismo usuario, canal y sesión durante todo el recorrido, y una falla o una demora de analytics nunca impide navegar.
 
-- **Plan de dependencias e insumos:** [DEPENDENCIAS.md](DEPENDENCIAS.md)
+- **Mapa de dependencias:** [MAPA-DE-DEPENDENCIAS.md](MAPA-DE-DEPENDENCIAS.md)
 - **Evidencia del recorrido y de las pruebas:** [EVIDENCIA.md](EVIDENCIA.md) y la carpeta [evidencia/](evidencia/)
 
 ## Cómo funciona
@@ -21,9 +21,13 @@ El portal de Nexo registra un evento al iniciar sesión y otro cada vez que el u
 - **Tiempo de espera acotado.** Cada envío se corta a los 3000 ms (`ANALYTICS_TIMEOUT_MS`) con `AbortSignal.timeout`.
 - **Errores controlados.** `sendAnalytics()` atrapa todos los errores y los escribe en la consola; nunca interrumpe el portal.
 - **Misma identidad en todo el recorrido.** Al iniciar sesión, el backend guarda `user` y `session` (un UUID) en memoria. En cada visita los recupera con la cookie del navegador. Se envía el UUID, nunca la cookie, porque la cookie da acceso a la sesión.
+- **Canal como número.** `ANALYTICS_CHANNEL` se convierte a número antes de enviarlo, porque la API rechaza en silencio un canal enviado como texto.
+- **Respuesta mínima al navegador.** Solo recibe `user`, `session` y `section`; el estado interno, como la sección actual, queda en el servidor.
 - **Visitas, no redibujos.** Volver a perfil después de movimientos genera un evento nuevo. Hacer clic otra vez en la sección que ya está abierta no genera otro.
 - **Sin reintentos.** La API no elimina duplicados y un timeout no prueba que el evento se perdió, así que reintentar podría duplicarlo. Queda como pendiente.
 - **Sin dependencias externas.** Solo se usan módulos incluidos en Node.js (`node:http`, `fetch`, `AbortSignal`, `node:child_process`).
+
+Cada decisión también está explicada en comentarios dentro de `server.mjs`, junto a la línea que la aplica.
 
 ## Archivos
 
@@ -31,7 +35,8 @@ El portal de Nexo registra un evento al iniciar sesión y otro cada vez que el u
 - `public/`: sitio original, sin cambios.
 - `scripts/pruebas.mjs`: pruebas contra la API real y contra el propio servidor; genera un reporte por ejecución.
 - `.env.example`: configuración de ejemplo, sin credenciales.
-- `DEPENDENCIAS.md`, `EVIDENCIA.md` y `evidencia/`: plan y evidencia.
+- `MAPA-DE-DEPENDENCIAS.md`: insumos, supuestos, preguntas pendientes y plan.
+- `EVIDENCIA.md` y `evidencia/`: evidencia del recorrido y reportes de cada ejecución de las pruebas.
 
 ## Ejecutar
 
@@ -74,7 +79,8 @@ El script:
 - levanta el propio `server.mjs` con analytics apuntando a un servicio que nunca responde, para probar la **demora**;
 - lo levanta otra vez apuntando a una dirección sin servicio, para probar **analytics caído**;
 - revisa que la respuesta al navegador no contenga el Bearer;
-- guarda un reporte nuevo en `evidencia/resultado-pruebas-<fecha>.md`, sin sobrescribir los anteriores.
+- marca cada comprobación automática como **PASA** o **FALLA** y deja como **VERIFICAR** lo que se confirma en la consulta de registros;
+- guarda un reporte nuevo en `evidencia/resultado-pruebas-<fecha>.md`, sin sobrescribir los anteriores, y termina con error si alguna comprobación falla.
 
 Al final imprime un usuario de prueba. En la consulta de registros, filtrando por ese usuario, deben aparecer **solo los 2 eventos válidos**, aunque todos los requests recibieron HTTP 200.
 

@@ -7,7 +7,9 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(fileURLToPath(import.meta.url));
 const sections = ['inicio', 'perfil', 'productos', 'movimientos', 'configuracion', 'ayuda'];
 const sessions = new Map();
+
 // Configuración de analytics: se lee del .env y solo existe en el backend.
+// channel se convierte a número porque la API rechaza en silencio un canal enviado como texto.
 const analytics = {
   baseUrl: (process.env.ANALYTICS_BASE_URL || '').replace(/\/+$/, ''),
   env: process.env.ANALYTICS_ENV,
@@ -27,14 +29,17 @@ async function sendAnalytics(kind, body) {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(analytics.timeoutMs),
     });
+    // Se registra el resultado sin el Bearer: solo el tipo de evento, el estado, el tiempo y el cuerpo.
+    // HTTP 200 solo indica que la API respondió; la aceptación se confirma en la consulta de registros.
     console.log('[analytics]', kind, 'HTTP', response.status, `${Date.now() - started} ms`, JSON.stringify(body));
   } catch (error) {
-     // Registra la falla sin detener el portal.
+    // Registra la falla sin detener el portal.
     // error.cause?.code da la causa concreta (por ejemplo, ECONNREFUSED si no hay servicio);
     // si no existe, como en un timeout, se usa error.name (TimeoutError).
     console.log('[analytics] FALLÓ', kind, error.cause?.code || error.name, `${Date.now() - started} ms`, JSON.stringify(body));
-  } 
+  }
 }
+
 function json(res, code, data) { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); }
 async function input(req) {
   let value = '';
@@ -43,8 +48,7 @@ async function input(req) {
 }
 function sessionFor(req) { return sessions.get(/(?:^|;\s*)nexo=([^;]+)/.exec(req.headers.cookie || '')?.[1]); }
 
-// TODO: integrar analytics en backend. La configuración del proveedor está en process.env.
-// Conservá la respuesta de navegación independiente del resultado de telemetría.
+// Servidor del portal: el login y las secciones envían su evento de analytics después de responder.
 export function createNexoServer() { return createServer(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -56,8 +60,10 @@ export function createNexoServer() { return createServer(async (req, res) => {
       const cookie = randomBytes(24).toString('hex');
       sessions.set(cookie, session);
       res.setHeader('Set-Cookie', `nexo=${cookie}; HttpOnly; SameSite=Strict; Path=/`);
-      json(res, 200, session); // 1) primero respondemos al usuario
-      sendAnalytics('login', { user: session.user, channel: analytics.channel, session: session.session }); // 2) después el evento
+      json(res, 200, session); // Primero se responde al usuario.
+      // Sin await: el evento se envía en segundo plano y la navegación nunca espera a analytics.
+      // Se envía el UUID de la sesión, nunca la cookie, porque la cookie da acceso a la sesión.
+      sendAnalytics('login', { user: session.user, channel: analytics.channel, session: session.session });
       return;
     }
     if (req.url === '/api/section' && req.method === 'POST') {
@@ -68,7 +74,9 @@ export function createNexoServer() { return createServer(async (req, res) => {
       // Es una visita nueva si la sección es distinta de la que ya estaba abierta.
       const isNewVisit = session.currentSection !== data.section;
       session.currentSection = data.section;
+      // Al navegador solo se le devuelve lo que necesita; currentSection queda interno en el servidor.
       json(res, 200, { user: session.user, session: session.session, section: data.section });
+      // Igual que en el login: primero la respuesta y después el evento, sin await.
       if (isNewVisit) {
         sendAnalytics('section', { user: session.user, channel: analytics.channel, session: session.session, section: data.section });
       }
