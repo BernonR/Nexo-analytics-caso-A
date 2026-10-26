@@ -1,0 +1,10 @@
+{
+  "name": "nexo-portal-starter",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20.6" },
+  "scripts": {
+    "start": "node --env-file=.env server.mjs",
+    "pruebas": "node --env-file=.env scripts/pruebas.mjs"
+  }
+}
